@@ -66,6 +66,8 @@ struct perf_event_attr;
 struct file_handle;
 struct sigaltstack;
 union bpf_attr;
+struct pagetable_layout_info;
+struct expose_pgtbl_args;
 
 #include <linux/types.h>
 #include <linux/aio_abi.h>
@@ -890,3 +892,9 @@ asmlinkage long sys_membarrier(int cmd, int flags);
 asmlinkage long sys_mlock2(unsigned long start, size_t len, int flags);
 
 #endif
+
+asmlinkage long sys_get_pagetable_layout(struct pagetable_layout_info
+			__user *pgtbl_info, int size);
+
+asmlinkage long sys_expose_page_table(pid_t pid,
+			struct expose_pgtbl_args __user *args);

@@ -332,6 +332,8 @@
 323	common	userfaultfd		sys_userfaultfd
 324	common	membarrier		sys_membarrier
 325	common	mlock2			sys_mlock2
+326     common  get_pagetable_layout    sys_get_pagetable_layout
+327     common  expose_page_table       sys_expose_page_table
 
 #
 # x32-specific system call numbers start at 512 to avoid cache impact
