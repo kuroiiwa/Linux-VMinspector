@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
+#include <sys/mman.h>
 #include <unistd.h>
 #include <stdint.h>
 
@@ -16,9 +17,22 @@ struct pagetable_layout_info {
         uint32_t page_shift;
  };
 
+struct expose_pgtbl_args {
+        unsigned long fake_pgd;
+        unsigned long fake_puds;
+        unsigned long fake_pmds;
+        unsigned long page_table_addr;
+        unsigned long begin_vaddr;
+        unsigned long end_vaddr;
+};
+
+
 int main(int argc, char **argv)
 {
 	struct pagetable_layout_info info;
+	struct expose_pgtbl_args args;
+	pid_t pid;
+        unsigned long *base_addr;
 
 	int res = syscall(__NR_get_pagetable_layout, &info,
 			sizeof(struct pagetable_layout_info));
@@ -26,6 +40,19 @@ int main(int argc, char **argv)
                 printf("layout: pgd[%d] pud[%d] pmd[%d] pg_shift[%d]\n",
                         info.pgdir_shift, info.pud_shift,
                         info.pmd_shift, info.page_shift);
-        
+
+	pid = getpid();
+        args.begin_vaddr = 0x557a43a05000;
+	args.end_vaddr = 0x7fffffffffff;
+        base_addr = (unsigned long *)malloc(sizeof(unsigned long) * 512);
+        args.fake_pgd = base_addr;
+        base_addr = (unsigned lone)mmap(NULL, sizeof(unsigned long) * 512 * 512,
+                        PROT_READ, MAP_ANONYMOUS, -1, 0);
+        args.fake_puds = base_addr;
+
+	res = syscall(__NR_expose_page_table, pid, &args);
+	if (res < 0)
+		printf("Error[%d]\n", res);
+	printf("%d\n", pid);
         return 0;
 }
