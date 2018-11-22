@@ -41,21 +41,41 @@ struct expose_pgtbl_args {
 void print_pgtbl(struct expose_pgtbl_args *args, unsigned long range)
 {
         unsigned long *pgd_table = (unsigned long *)args->fake_pgd;
-        //unsigned long *pud_tables = (unsigned long *)args->fake_puds;
+        unsigned long *pud_tables = (unsigned long *)args->fake_puds;
+        unsigned long *pmd_tables = (unsigned long *)args->fake_pmds;
+        int total_pgd = (int)range;
 
+        printf("======PGD=====\n");
         for (int i = 0; i < 512; i++) {
                 if (pgd_table[i] == 0)
                         continue;
-                printf("%3d|0x%16lx|\n", i, pgd_table[i]);
+                printf("%03d|0x%016lx|\n", i, pgd_table[i]);
         }
-        //for (int i = 0; i < range; i++) {
-        //        for (int j = 0; j < 512; j++) {
-        //                if (pud_tables+(i-1)*512+j == NULL)
-        //                        continue;
-        //                printf("%3d->%3d|0x%16lx|\n", i, j, pud_tables[(i-1)*512+j]);
-        //        }
-       // }
+        printf("======PUD=====\n");
+        printf("%d\n", total_pgd);
+        for (int i = 0; i < total_pgd; i++) {
+               for (int j = 0; j < 512; j++) {
+                       if (pud_tables[j] == 0)
+                               continue;
+                       printf("%03d->%03d|0x%016lx|\n",i ,j , pud_tables[j]);
+               }
+               pud_tables = (unsigned long *)((unsigned long)pud_tables
+                       + 512 * sizeof(unsigned long));
+        }
+        printf("======PMD=====\n");
+        for (int i = 0; i < total_pgd; i++) {
+                for (int j = 0; j < 512; j++) {
+                        for (int m = 0; m < 512; m++) {
+                                if (pmd_tables[m] == 0)
+                                        continue;
+                                printf("%03d->%03d->%3d|0x%016lx|\n",i ,j ,m, pmd_tables[m]);
+                        }
+                        pmd_tables = (unsigned long *)((unsigned long)pmd_tables
+                                + 512 * sizeof(unsigned long));
+               }
+        }
 }
+
 int main(int argc, char **argv)
 {
 	struct pagetable_layout_info info;
@@ -71,8 +91,8 @@ int main(int argc, char **argv)
                         info.pgdir_shift, info.pud_shift,
                         info.pmd_shift, info.page_shift);
 
-        args.begin_vaddr = 0x0;
-	args.end_vaddr = 0x7fffffffffff;
+        args.begin_vaddr = 0x640000000000; //PGD=200
+	args.end_vaddr = 0xffffffffffff; //VA_END
 
         base_addr = (unsigned long *)malloc(sizeof(unsigned long) * 512);
         if (base_addr == NULL)
