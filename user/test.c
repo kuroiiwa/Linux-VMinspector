@@ -47,7 +47,7 @@ void print_pgtbl(struct expose_pgtbl_args *args, unsigned long range)
 
         printf("======PGD=====\n");
         for (int i = 0; i < 512; i++) {
-                if (pgd_table[i] == 0)
+                if (!pgd_table[i])
                         continue;
                 printf("%03d|0x%016lx|\n", i, pgd_table[i]);
         }
@@ -55,9 +55,9 @@ void print_pgtbl(struct expose_pgtbl_args *args, unsigned long range)
         printf("%d\n", total_pgd);
         for (int i = 0; i < total_pgd; i++) {
                for (int j = 0; j < 512; j++) {
-                       if (pud_tables[j] == 0)
+                       if (!pud_tables[j])
                                continue;
-                       printf("%03d->%03d|0x%016lx|\n",i ,j , pud_tables[j]);
+                       printf("%03d->%03d|0x%016lx|\n",i ,j , (long unsigned int)&pud_tables[j]);
                }
                pud_tables = (unsigned long *)((unsigned long)pud_tables
                        + 512 * sizeof(unsigned long));

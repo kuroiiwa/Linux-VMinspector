@@ -8,7 +8,8 @@
 #include <asm/pgtable.h>
 #include <linux/sched.h>
 #include <linux/mm_types.h>
-
+int fake_pud_assign = 0;
+int fake_pmd_assign = 0;
 
 SYSCALL_DEFINE2(get_pagetable_layout, struct pagetable_layout_info __user *,
         pgtbl_info, int, size)
@@ -31,7 +32,7 @@ SYSCALL_DEFINE2(get_pagetable_layout, struct pagetable_layout_info __user *,
 }
 
 int save_pgd(unsigned long fake_pgd, unsigned long fake_puds,
-                unsigned long curr_va, unsigned long start_offset)
+                unsigned long curr_va)
 {
         unsigned long *f_pgd_ent;
         unsigned long f_pud_addr;
@@ -41,90 +42,37 @@ int save_pgd(unsigned long fake_pgd, unsigned long fake_puds,
                         * sizeof(unsigned long));
 
         f_pud_addr = fake_puds +
-                        (pgd_index(curr_va) - start_offset) * PTRS_PER_PGD
-                        * sizeof(unsigned long);
+                        (fake_pud_assign * PTRS_PER_PUD
+                        * sizeof(unsigned long));
+        fake_pud_assign++;
 
         if (copy_to_user(f_pgd_ent, &f_pud_addr, sizeof(unsigned long)))
                 return -EFAULT;
 
-        printk("PGD saved! %lu|%lu\n", pgd_index(curr_va),
-                (pgd_index(curr_va) - start_offset));
+        printk("PGD saved! %lu|%d\n", pgd_index(curr_va), fake_pud_assign);
         return 0;
 }
-int save_pud(unsigned long fake_puds, unsigned long fake_pmds,
-                unsigned long curr_va, unsigned long start_offset)
+int save_pud(unsigned long fake_pgd, unsigned long fake_puds, unsigned long fake_pmds, unsigned long curr_va)
 {
-        unsigned long *f_pud_ent;
+        unsigned long *f_pud_ent, *f_pud_tbl;
         unsigned long f_pmd_addr;
 
-
-        f_pud_ent = (unsigned long *)(fake_puds +
-                        ((pgd_index(curr_va) - start_offset) * PTRS_PER_PGD
-                        + pud_index(curr_va))
+        f_pud_tbl = (unsigned long *)(fake_pgd + pgd_index(curr_va)
                         * sizeof(unsigned long));
 
-        f_pmd_addr = fake_pmds +
-                ((pgd_index(curr_va) - start_offset) * PTRS_PER_PGD
-                + pud_index(curr_va)) * PTRS_PER_PUD
-                * sizeof(unsigned long);
+        f_pud_ent = (unsigned long *)(*f_pud_tbl + pud_index(curr_va)
+                        * sizeof(unsigned long));
+
+        f_pmd_addr = fake_pmds + fake_pmd_assign * sizeof(unsigned long);
+
+        fake_pmd_assign++;
 
         if (copy_to_user(f_pud_ent, &f_pmd_addr, sizeof(unsigned long)))
                 return -EFAULT;
 
-        printk("PUD saved! %lu|%lu\n", pud_index(curr_va),
-                ((pgd_index(curr_va) - start_offset) * PTRS_PER_PUD
-                + pud_index(curr_va)));
+        printk("PUD saved! %lu|%d\n", pud_index(curr_va), fake_pmd_assign);
         return 0;
 
-}
-
-int remap_this(unsigned long fake_pmds,unsigned long page_table_addr,
-        unsigned long curr_va, unsigned long start_offset,
-        pmd_t *pmd_p, struct vm_area_struct *vma,
-        struct task_struct *p)
-{
-        unsigned long *f_pmd_ent;
-        unsigned long k_pte_addr, f_pte_addr;
-        int res;
-
-        f_pmd_ent = (unsigned long *)(fake_pmds +
-                (((pgd_index(curr_va) - start_offset) * PTRS_PER_PGD
-                + pud_index(curr_va)) * PTRS_PER_PUD
-                + pmd_index(curr_va)) * sizeof(unsigned long));
-
-        f_pte_addr = page_table_addr +
-                (((pgd_index(curr_va) - start_offset) * PTRS_PER_PGD
-                + pud_index(curr_va)) * PTRS_PER_PUD
-                + pmd_index(curr_va)) * PTRS_PER_PMD * sizeof(unsigned long);
-
-        if (copy_to_user(f_pmd_ent, &f_pte_addr, sizeof(unsigned long)))
-                return -EFAULT;
-
-        printk("PMD saved! %lu|%lu\n", pmd_index(curr_va),
-                (((pgd_index(curr_va) - start_offset) * PTRS_PER_PUD
-                + pud_index(curr_va)) * PTRS_PER_PMD
-                + pmd_index(curr_va)));
-
-        k_pte_addr = page_to_pfn(pmd_page(*pmd_p));
-
-        // if (p != current)
-        //         down_write(&p->mm->mmap_sem);
-        // down_write(&current->mm->mmap_sem);
-        // if ((res = remap_pfn_range(vma,
-        //         f_pte_addr,
-        //         k_pte_addr,
-        //         PAGE_SIZE,
-        //         vma->vm_page_prot))) {
-        //         if (p != current)
-        //                 up_write(&p->mm->mmap_sem);
-        //         up_write(&current->mm->mmap_sem);
-        //         printk("errno:%d\n", res);
-        //         return -EAGAIN;
-        // }
-        // if (p != current)
-        //         up_write(&p->mm->mmap_sem);
-        // up_write(&current->mm->mmap_sem);
-        return 0;
 }
 
 SYSCALL_DEFINE2(expose_page_table, pid_t, pid,
@@ -136,11 +84,10 @@ SYSCALL_DEFINE2(expose_page_table, pid_t, pid,
         struct vm_area_struct *vma;
         const unsigned long ubound_va = 0xffffffffffff;
         //unsigned long *pgd_k;
-        unsigned long start, end, curr_va, prev_va, start_offset;
+        unsigned long start, end, curr_va, prev_va;
         int last_vm, res;
         pgd_t *pgd_p;
         pud_t *pud_p;
-        pmd_t *pmd_p;
 
         if (args == NULL || pid < -1)
                 return -EINVAL;
@@ -176,11 +123,7 @@ SYSCALL_DEFINE2(expose_page_table, pid_t, pid,
 
         last_vm = 0;
         prev_va = ubound_va;
-        if (vma->vm_start > args_k.begin_vaddr)
-                start_offset = pgd_index(vma->vm_start);
-        else
-                start_offset = pgd_index(args_k.begin_vaddr);
-        printk("offset:%lu\n", start_offset);
+
         //spin_lock(&mm->page_table_lock);
         for (; vma->vm_next != NULL; vma = vma->vm_next) {
                 if (likely(vma->vm_start > args_k.begin_vaddr))
@@ -212,7 +155,7 @@ SYSCALL_DEFINE2(expose_page_table, pid_t, pid,
                         }
                         if (pgd_index(curr_va) != pgd_index(prev_va)) {
                                 res = save_pgd(args_k.fake_pgd, args_k.fake_puds,
-                                        curr_va, start_offset);
+                                        curr_va);
                                 if (unlikely(res < 0)) {
                                         //spin_unlock(&mm->page_table_lock);
                                         return res;
@@ -225,23 +168,8 @@ SYSCALL_DEFINE2(expose_page_table, pid_t, pid,
                                 continue;
                         }
                         if (pud_index(curr_va) != pud_index(prev_va)) {
-                                res = save_pud(args_k.fake_puds, args_k.fake_pmds,
-                                        curr_va, start_offset);
-                                if (unlikely(res < 0)) {
-                                        //spin_unlock(&mm->page_table_lock);
-                                        return res;
-                                }
-                        }
-                        /* Remap */
-                        pmd_p = pmd_offset(pud_p, curr_va);
-                        if (pmd_none(*pmd_p) || pmd_bad(*pmd_p)) {
-                                prev_va = curr_va;
-                                continue;
-                        }
-                        if (pmd_index(curr_va) != pmd_index(prev_va)) {
-                                res = remap_this(args_k.fake_pmds,
-                                        args_k.page_table_addr,
-                                        curr_va, start_offset, pmd_p, vma, p);
+                                res = save_pud(args_k.fake_pgd, args_k.fake_puds, args_k.fake_pmds,
+                                        curr_va);
                                 if (unlikely(res < 0)) {
                                         //spin_unlock(&mm->page_table_lock);
                                         return res;
