@@ -38,7 +38,24 @@ struct expose_pgtbl_args {
         unsigned long end_vaddr;
 };
 
+void print_pgtbl(struct expose_pgtbl_args *args, unsigned long range)
+{
+        unsigned long *pgd_table = (unsigned long *)args->fake_pgd;
+        //unsigned long *pud_tables = (unsigned long *)args->fake_puds;
 
+        for (int i = 0; i < 512; i++) {
+                if (pgd_table[i] == 0)
+                        continue;
+                printf("%3d|0x%16lx|\n", i, pgd_table[i]);
+        }
+        //for (int i = 0; i < range; i++) {
+        //        for (int j = 0; j < 512; j++) {
+        //                if (pud_tables+(i-1)*512+j == NULL)
+        //                        continue;
+        //                printf("%3d->%3d|0x%16lx|\n", i, j, pud_tables[(i-1)*512+j]);
+        //        }
+       // }
+}
 int main(int argc, char **argv)
 {
 	struct pagetable_layout_info info;
@@ -54,25 +71,39 @@ int main(int argc, char **argv)
                         info.pgdir_shift, info.pud_shift,
                         info.pmd_shift, info.page_shift);
 
-	pid = getpid();
         args.begin_vaddr = 0x0;
 	args.end_vaddr = 0x7fffffffffff;
+
         base_addr = (unsigned long *)malloc(sizeof(unsigned long) * 512);
+        if (base_addr == NULL)
+                return -1;
         args.fake_pgd = (unsigned long)base_addr;
 
         range = pgd_index(args.end_vaddr) - pgd_index(args.begin_vaddr) + 1;
 
         base_addr = mmap(NULL, sizeof(unsigned long) * range * 512,
                         PROT_WRITE | PROT_READ, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+        if (base_addr == NULL)
+                return -1;
         args.fake_puds = (unsigned long)base_addr;
 
         base_addr = mmap(NULL, sizeof(unsigned long) * range * 512 * 512,
                         PROT_WRITE | PROT_READ, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+        if (base_addr == NULL)
+                return -1;
         args.fake_pmds = (unsigned long)base_addr;
-        
+
+        base_addr = mmap(NULL, sizeof(unsigned long) * range * 512 * 512 * 512,
+                        PROT_WRITE | PROT_READ, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+        if (base_addr == NULL)
+                return -1;
+        args.page_table_addr = (unsigned long)base_addr;
+
+        pid = -1;
+	printf("%d %lu\n", getpid(), range);
 	res = syscall(__NR_expose_page_table, pid, &args);
 	if (res < 0)
 		printf("Error[%d]\n", res);
-	printf("%d\n", pid);
+        print_pgtbl(&args, range);
         return 0;
 }

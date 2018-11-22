@@ -9,9 +9,6 @@
 #include <linux/sched.h>
 #include <linux/mm_types.h>
 
-#define PER_PUDTBL_SIZE (sizeof(unsigned long) * PTRS_PER_PUD)
-#define PER_PMDTBL_SIZE (sizeof(unsigned long) * PTRS_PER_PMD)
-#define PER_PTETBL_SZIE (sizeof(unsigned long) * PTRS_PER_PTE)
 
 SYSCALL_DEFINE2(get_pagetable_layout, struct pagetable_layout_info __user *,
         pgtbl_info, int, size)
@@ -48,6 +45,7 @@ int save_pgd(unsigned long fake_pgd, unsigned long fake_puds,
 
         if (copy_to_user(f_pgd_ent, &f_pud_addr, sizeof(unsigned long)))
                 return -EFAULT;
+
         printk("PGD saved! %lu|%lu\n", pgd_index(curr_va),
                 (pgd_index(curr_va) - start_offset));
         return 0;
@@ -69,29 +67,58 @@ int save_pud(unsigned long fake_puds, unsigned long fake_pmds,
                         PTRS_PER_PUD + pud_index(curr_va)) * PTRS_PER_PMD
                         * sizeof(unsigned long);
 
+        if (copy_to_user(f_pud_ent, &f_pmd_addr, sizeof(unsigned long)))
+                return -EFAULT;
+
         printk("PUD saved! %lu|%lu\n", pud_index(curr_va),
                 ((pgd_index(curr_va) - start_offset) * PTRS_PER_PUD
                 + pud_index(curr_va)));
-
-        if (copy_to_user(f_pud_ent, &f_pmd_addr, sizeof(unsigned long)))
-                return -EFAULT;
         return 0;
 
 }
 
 int remap_this(unsigned long fake_pmds,unsigned long page_table_addr,
         unsigned long curr_va, unsigned long start_offset,
-        pmd_t *pmd_p, struct vm_area_struct vma)
+        pmd_t *pmd_p, struct vm_area_struct *vma,
+        struct task_struct *p)
 {
         unsigned long *f_pmd_ent;
-        unsigned long k_pgtbl_addr;
+        unsigned long k_pte_addr, f_pte_addr;
 
-        f_pmd_ent = (unsigned long *)((fake_pmds +
-                ((pgd_index(curr_va) - start_offset) * PTRS_PER_PUD
+        f_pmd_ent = (unsigned long *)(fake_pmds +
+                (((pgd_index(curr_va) - start_offset) * PTRS_PER_PUD
                 + pud_index(curr_va)) * PTRS_PER_PMD
                 + pmd_index(curr_va)) * sizeof(unsigned long));
 
-        k_pgtbl_addr =
+        f_pte_addr = page_table_addr + (((pgd_index(curr_va) - start_offset)
+                * PTRS_PER_PUD + pud_index(curr_va))
+                * PTRS_PER_PMD + pmd_index(curr_va))
+                * PTRS_PER_PTE * sizeof(unsigned long);
+
+        if (copy_to_user(f_pmd_ent, &f_pte_addr, sizeof(unsigned long)))
+                return -EFAULT;
+
+        printk("PMD saved! %lu|%lu\n", pmd_index(curr_va),
+                (((pgd_index(curr_va) - start_offset) * PTRS_PER_PUD
+                + pud_index(curr_va)) * PTRS_PER_PMD
+                + pmd_index(curr_va)));
+
+        k_pte_addr = page_to_pfn(pmd_page(*pmd_p));
+
+        if (p != current)
+                down_write(&p->mm->mmap_sem);
+        down_write(&current->mm->mmap_sem);
+        if (remap_pfn_range(vma, f_pte_addr, k_pte_addr,
+                PAGE_SIZE, vma->vm_page_prot)) {
+                if (p != current)
+                        up_write(&p->mm->mmap_sem);
+                up_write(&current->mm->mmap_sem);
+                return -EAGAIN;
+        }
+        if (p != current)
+                up_write(&p->mm->mmap_sem);
+        up_write(&current->mm->mmap_sem);
+        return 0;
 }
 
 SYSCALL_DEFINE2(expose_page_table, pid_t, pid,
@@ -148,7 +175,7 @@ SYSCALL_DEFINE2(expose_page_table, pid_t, pid,
         else
                 start_offset = pgd_index(args_k.begin_vaddr);
         printk("offset:%lu\n", start_offset);
-        spin_lock(&mm->page_table_lock);
+        //spin_lock(&mm->page_table_lock);
         for (; vma->vm_next != NULL; vma = vma->vm_next) {
                 if (likely(vma->vm_start > args_k.begin_vaddr))
                         start = vma->vm_start;
@@ -173,25 +200,29 @@ SYSCALL_DEFINE2(expose_page_table, pid_t, pid,
                 for (curr_va = start; curr_va <= end; curr_va++) {
                         /* PGD */
                         pgd_p = pgd_offset(mm, curr_va);
-                        if (pgd_none(*pgd_p))
+                        if (pgd_none(*pgd_p)) {
+                                prev_va = curr_va;
                                 continue;
+                        }
                         if (pgd_index(curr_va) != pgd_index(prev_va)) {
                                 res = save_pgd(args_k.fake_pgd, args_k.fake_puds,
                                         curr_va, start_offset);
                                 if (unlikely(res < 0)) {
-                                        spin_unlock(&mm->page_table_lock);
+                                        //spin_unlock(&mm->page_table_lock);
                                         return res;
                                 }
                         }
                         /* PUD */
                         pud_p = pud_offset(pgd_p, curr_va);
-                        if (pud_none(*pud_p))
+                        if (pud_none(*pud_p)) {
+                                prev_va = curr_va;
                                 continue;
+                        }
                         if (pud_index(curr_va) != pud_index(prev_va)) {
                                 res = save_pud(args_k.fake_puds, args_k.fake_pmds,
                                         curr_va, start_offset);
                                 if (unlikely(res < 0)) {
-                                        spin_unlock(&mm->page_table_lock);
+                                        //spin_unlock(&mm->page_table_lock);
                                         return res;
                                 }
                         }
@@ -202,7 +233,11 @@ SYSCALL_DEFINE2(expose_page_table, pid_t, pid,
                         if (pmd_index(curr_va) != pmd_index(prev_va)) {
                                 res = remap_this(args_k.fake_pmds,
                                         args_k.page_table_addr,
-                                        curr_va, start_offset, pmd_p, vma)
+                                        curr_va, start_offset, pmd_p, vma, p);
+                                if (unlikely(res < 0)) {
+                                        //spin_unlock(&mm->page_table_lock);
+                                        return res;
+                                }
                         }
 
                         prev_va = curr_va;
@@ -211,6 +246,6 @@ SYSCALL_DEFINE2(expose_page_table, pid_t, pid,
                 if (unlikely(last_vm))
                         break;
         }
-        spin_unlock(&mm->page_table_lock);
+        //spin_unlock(&mm->page_table_lock);
         return 1;
 }
