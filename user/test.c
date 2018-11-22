@@ -33,6 +33,7 @@ int main(int argc, char **argv)
 	struct expose_pgtbl_args args;
 	pid_t pid;
         unsigned long *base_addr;
+       // unsigned long range;
 
 	int res = syscall(__NR_get_pagetable_layout, &info,
 			sizeof(struct pagetable_layout_info));
@@ -42,14 +43,17 @@ int main(int argc, char **argv)
                         info.pmd_shift, info.page_shift);
 
 	pid = getpid();
-        args.begin_vaddr = 0x557a43a05000;
+        args.begin_vaddr = 0x0;
 	args.end_vaddr = 0x7fffffffffff;
         base_addr = (unsigned long *)malloc(sizeof(unsigned long) * 512);
-        args.fake_pgd = base_addr;
-        base_addr = (unsigned lone)mmap(NULL, sizeof(unsigned long) * 512 * 512,
+        args.fake_pgd = (unsigned long)base_addr;
+        base_addr = mmap(NULL, sizeof(unsigned long) * 512 * 512,
                         PROT_READ, MAP_ANONYMOUS, -1, 0);
-        args.fake_puds = base_addr;
-
+        args.fake_puds = (unsigned long)base_addr;
+        base_addr = mmap(NULL, sizeof(unsigned long) * 512 * 512 * 512,
+                        PROT_READ, MAP_ANONYMOUS, -1, 0);
+        args.fake_pmds = (unsigned long)base_addr;
+        //pid = 1;
 	res = syscall(__NR_expose_page_table, pid, &args);
 	if (res < 0)
 		printf("Error[%d]\n", res);
