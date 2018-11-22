@@ -48,12 +48,12 @@ int main(int argc, char **argv)
         base_addr = (unsigned long *)malloc(sizeof(unsigned long) * 512);
         args.fake_pgd = (unsigned long)base_addr;
         base_addr = mmap(NULL, sizeof(unsigned long) * 512 * 512,
-                        PROT_READ, MAP_ANONYMOUS, -1, 0);
+                        PROT_WRITE | PROT_READ, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
         args.fake_puds = (unsigned long)base_addr;
         base_addr = mmap(NULL, sizeof(unsigned long) * 512 * 512 * 512,
-                        PROT_READ, MAP_ANONYMOUS, -1, 0);
+                        PROT_WRITE | PROT_READ, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
         args.fake_pmds = (unsigned long)base_addr;
-        //pid = 1;
+        pid = 1;
 	res = syscall(__NR_expose_page_table, pid, &args);
 	if (res < 0)
 		printf("Error[%d]\n", res);

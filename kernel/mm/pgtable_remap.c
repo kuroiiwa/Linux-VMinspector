@@ -65,12 +65,13 @@ int save_pud(unsigned long fake_puds, unsigned long fake_pmds)
 
         f_pud_tbl_addr = fake_puds + f_pgd_n * PER_PUDTBL_SIZE;
 
-        f_pud_p = (unsigned long *) (f_pud_tbl_addr +
+        f_pud_p = (unsigned long *)(f_pud_tbl_addr +
                                 f_pud_n * sizeof(unsigned long));
 
         f_pmd_addr = fake_pmds + ((f_pgd_n - 1) * PTRS_PER_PUD
                         + f_pud_n) * PER_PMDTBL_SIZE;
-
+        f_pud_n++;
+        f_pmd_n++;
         printk("save_pud:%d-%d-%d\n", f_pgd_n, f_pud_n, f_pmd_n);
 
         if (copy_to_user(f_pud_p, &f_pmd_addr, sizeof(unsigned long)))
@@ -92,8 +93,14 @@ SYSCALL_DEFINE2(expose_page_table, pid_t, pid,
         int last_vm, res;
         pgd_t *pgd_p;
         pud_t *pud_p;
+        f_pgd_n = 0;
+        f_pud_n = 0;
+        f_pmd_n = 0;
+        pgd_index_pre = -1;
+        pud_index_pre = -1;
+        pmd_index_pre = -1;
 
-        if (args == NULL || pid < 0)
+        if (args == NULL || pid < -1)
                 return -EINVAL;
         if (copy_from_user(&args_k, args,
                         sizeof(struct expose_pgtbl_args)))
@@ -161,10 +168,12 @@ SYSCALL_DEFINE2(expose_page_table, pid_t, pid,
                                 continue;
                         if (pgd_index(curr_va) != pgd_index_pre) {
                                 f_pud_n = 0;
-                                f_pmd_n = 0;
                                 res = save_pgd(args_k.fake_pgd, args_k.fake_puds);
-                                if (unlikely(res < 0))
+                                if (unlikely(res < 0)) {
+                                        spin_unlock(&mm->page_table_lock);
+                                        printk("copy_pgd\n");
                                         return res;
+                                }
                         }
 
                         /* PUD */
@@ -175,8 +184,11 @@ SYSCALL_DEFINE2(expose_page_table, pid_t, pid,
                                 f_pmd_n = 0;
                                 res = save_pud(args_k.fake_puds,
                                                         args_k.fake_pmds);
-                                if (unlikely(res < 0))
+                                if (unlikely(res < 0)) {
+                                        spin_unlock(&mm->page_table_lock);
+                                        printk("copy_pud\n");
                                         return res;
+                                }
                         }
                         // /* PMD */
                         // pmd_t *pmd_p = pmd_offset(pud_p, curr_va);
