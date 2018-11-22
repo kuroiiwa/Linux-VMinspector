@@ -10,6 +10,18 @@
 #define __NR_get_pagetable_layout 326
 #define __NR_expose_page_table 327
 
+#define PGDIR_SHIFT		39
+#define PUD_SHIFT		30
+#define PMD_SHIFT		21
+#define PAGE_SHIFT		12
+#define PTRS_PER_PTE		512
+#define PTRS_PER_PMD		512
+#define PTRS_PER_PGD		512
+
+#define pgd_index(addr)		(((addr) >> PGDIR_SHIFT) & (PTRS_PER_PGD - 1))
+#define pmd_index(addr)		(((addr) >> PMD_SHIFT) & (PTRS_PER_PMD - 1))
+#define pte_index(addr)		(((addr) >> PAGE_SHIFT) & (PTRS_PER_PTE - 1))
+
 struct pagetable_layout_info {
         uint32_t pgdir_shift;
         uint32_t pud_shift;
@@ -33,7 +45,7 @@ int main(int argc, char **argv)
 	struct expose_pgtbl_args args;
 	pid_t pid;
         unsigned long *base_addr;
-       // unsigned long range;
+        unsigned long range;
 
 	int res = syscall(__NR_get_pagetable_layout, &info,
 			sizeof(struct pagetable_layout_info));
@@ -47,13 +59,17 @@ int main(int argc, char **argv)
 	args.end_vaddr = 0x7fffffffffff;
         base_addr = (unsigned long *)malloc(sizeof(unsigned long) * 512);
         args.fake_pgd = (unsigned long)base_addr;
-        base_addr = mmap(NULL, sizeof(unsigned long) * 512 * 512,
+
+        range = pgd_index(args.end_vaddr) - pgd_index(args.begin_vaddr) + 1;
+
+        base_addr = mmap(NULL, sizeof(unsigned long) * range * 512,
                         PROT_WRITE | PROT_READ, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
         args.fake_puds = (unsigned long)base_addr;
-        base_addr = mmap(NULL, sizeof(unsigned long) * 512 * 512 * 512,
+
+        base_addr = mmap(NULL, sizeof(unsigned long) * range * 512 * 512,
                         PROT_WRITE | PROT_READ, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
         args.fake_pmds = (unsigned long)base_addr;
-        pid = 1;
+        
 	res = syscall(__NR_expose_page_table, pid, &args);
 	if (res < 0)
 		printf("Error[%d]\n", res);
