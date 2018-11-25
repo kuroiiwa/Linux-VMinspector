@@ -6,6 +6,7 @@
 #include <sys/mman.h>
 #include <unistd.h>
 #include <stdint.h>
+#include <string.h>
 
 #define __NR_get_pagetable_layout 326
 #define __NR_expose_page_table 327
@@ -121,26 +122,38 @@ int main(int argc, char *argv[])
         unsigned long *base_addr;
         unsigned long va_begin, va_end;
         int res, flag;
+        const char *dec = "0123456789";
+        const char *hex = "0123456789abcdefABCDEFxX";
 
-
-        if (argc < 3){
-        	printf("input invalid");
+        /*ref:https://stackoverflow.com/
+         *questions/8393389/inputing-validating-hex-values-correctly
+         */
+        if (argc == 4) {
+                if (argv[1][strspn(argv[1], dec)] == 0 &&
+                argv[2][strspn(argv[2], hex)] == 0 &&
+                argv[3][strspn(argv[3], hex)] == 0) {
+                        pid = strtol(argv[1], NULL, 10);
+                        va_begin = strtoul(argv[2], NULL, 0);
+                        va_end = strtoul(argv[3], NULL, 0);
+                        flag = 0;
+                } else
+                        goto Parse_error;
+        } else if (argc == 5) {
+                if (argv[2][strspn(argv[2], dec)] == 0 &&
+                argv[3][strspn(argv[3], hex)] == 0 &&
+                argv[4][strspn(argv[4], hex)] == 0 &&
+                !strcmp(argv[1], "-v")) {
+                        pid = strtol(argv[2], NULL, 10);
+                        va_begin = strtoul(argv[3], NULL, 0);
+                        va_end = strtoul(argv[4], NULL, 0);
+                        flag = 1;
+                } else
+                        goto Parse_error;
+        } else {
+Parse_error:
+                printf("Usage: ./vm_inspector [-v] pid va_begin va_end\n");
         	return -1;
         }
-
-
-        if (argv[1][0] != '-') {
-                pid = strtol(argv[1], NULL, 10);
-                va_begin = strtoul(argv[2], NULL, 0);
-                va_end = strtoul(argv[3], NULL, 0);
-                flag = 0;
-        } else {
-		pid = strtol(argv[2], NULL, 10);
-                va_begin = strtoul(argv[3], NULL, 0);
-                va_end = strtoul(argv[4], NULL, 0);
-                flag = 1;
-        }
-        printf("the argument is %d %lu %lu \n", pid, va_begin, va_end);
 
         args.begin_vaddr = va_begin;
 	args.end_vaddr = va_end;
@@ -171,7 +184,7 @@ int main(int argc, char *argv[])
 	res = syscall(__NR_expose_page_table, pid, &args);
 	if (res < 0){
 		printf("Error: %d\n", res);
-                return 0;
+                return -1;
         }
         print_pgtbl(&args, flag);
         return 0;
