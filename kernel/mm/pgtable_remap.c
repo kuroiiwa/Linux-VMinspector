@@ -8,6 +8,7 @@
 #include <asm/pgtable.h>
 #include <linux/sched.h>
 #include <linux/mm_types.h>
+#include <linux/rwsem.h>
 int fake_pud_assign = 0;
 int fake_pmd_assign = 0;
 int fake_pte_assign = 0;
@@ -77,10 +78,12 @@ int save_pud(unsigned long fake_pgd, unsigned long fake_pmds, unsigned long curr
 
 }
 
-int save_pmd(unsigned long fake_pgd, unsigned long page_table_addr, unsigned long curr_va)
+int save_pmd(unsigned long fake_pgd, unsigned long page_table_addr, unsigned long curr_va, pmd_t *pmd_p, struct task_struct *p)
 {
         unsigned long *f_pgd_ent, *f_pud_ent, *f_pmd_ent;
-        unsigned long f_pte_addr;
+        unsigned long f_pte_addr, pfn;
+        struct vm_area_struct *pte_vma;
+
 
         f_pgd_ent = (unsigned long *)(fake_pgd + pgd_index(curr_va)
                         * sizeof(unsigned long));
@@ -93,11 +96,38 @@ int save_pmd(unsigned long fake_pgd, unsigned long page_table_addr, unsigned lon
 
         f_pte_addr = page_table_addr + fake_pte_assign * sizeof(unsigned long)
                         * PTRS_PER_PTE;
+        fake_pte_assign++;
 
         if (copy_to_user(f_pmd_ent, &f_pte_addr, sizeof(unsigned long)))
                 return -EFAULT;
 
-        printk("PUD saved! %lu|%d\n", pmd_index(curr_va), fake_pte_assign);
+        pte_vma = find_vma(current->mm, f_pte_addr);
+        if (pte_vma == NULL){
+                printk("no find pte_vma");
+                return -EFAULT;
+        }
+
+
+        pfn = pmd_pfn(*pmd_p);
+
+        if (p != current)
+                down_write(&current->mm->mmap_sem);
+        down_write(&p->mm->mmap_sem);
+        if (remap_pfn_range(pte_vma, f_pte_addr, pfn,
+		     PAGE_SIZE,
+		     pte_vma->vm_page_prot)){
+                             up_write(&p->mm->mmap_sem);
+                             if (p != current)
+                                     down_write(&current->mm->mmap_sem);
+                             return -EAGAIN;
+                     }
+
+
+        up_write(&p->mm->mmap_sem);
+        if (p != current)
+                down_write(&current->mm->mmap_sem);
+
+        printk("PMD saved! %lu|%d\n", pmd_index(curr_va), fake_pte_assign);
         return 0;
 
 }
@@ -140,19 +170,18 @@ SYSCALL_DEFINE2(expose_page_table, pid_t, pid,
                 return -ESRCH;
 
         mm = get_task_mm(p);
-
         if (mm == NULL)
                 return -EFAULT;
 
         vma = find_vma(mm, args_k.begin_vaddr);
-
         if (vma == NULL)
                 return -EFAULT;
 
         last_vm = 0;
         prev_va = ubound_va;
 
-        //spin_lock(&mm->page_table_lock);
+        if(p != current)
+                spin_lock(&mm->page_table_lock);
         for (; vma->vm_next != NULL; vma = vma->vm_next) {
                 if (likely(vma->vm_start > args_k.begin_vaddr))
                         start = vma->vm_start;
@@ -185,7 +214,8 @@ SYSCALL_DEFINE2(expose_page_table, pid_t, pid,
                                 res = save_pgd(args_k.fake_pgd, args_k.fake_puds,
                                         curr_va);
                                 if (unlikely(res < 0)) {
-                                        //spin_unlock(&mm->page_table_lock);
+                                        if(p != current)
+                                                spin_unlock(&mm->page_table_lock);
                                         return res;
                                 }
                         }
@@ -195,10 +225,11 @@ SYSCALL_DEFINE2(expose_page_table, pid_t, pid,
                                 prev_va = curr_va;
                                 continue;
                         }
-                        if (pud_index(curr_va) != pud_index(prev_va)) {
+                        if (pgd_index(curr_va) != pgd_index(prev_va) || pud_index(curr_va) != pud_index(prev_va)) {
                                 res = save_pud(args_k.fake_pgd, args_k.fake_pmds, curr_va);
                                 if (unlikely(res < 0)) {
-                                        //spin_unlock(&mm->page_table_lock);
+                                        if(p != current)
+                                                spin_unlock(&mm->page_table_lock);
                                         return res;
                                 }
                         }
@@ -208,10 +239,11 @@ SYSCALL_DEFINE2(expose_page_table, pid_t, pid,
                                 prev_va = curr_va;
                                 continue;
                         }
-                        if (pmd_index(curr_va) != pmd_index(prev_va)) {
-                                res = save_pmd(args_k.fake_pgd, args_k.page_table_addr, curr_va);
+                        if (pgd_index(curr_va) != pgd_index(prev_va) || pud_index(curr_va) != pud_index(prev_va) || pmd_index(curr_va) != pmd_index(prev_va)) {
+                                res = save_pmd(args_k.fake_pgd, args_k.page_table_addr, curr_va, pmd_p, p);
                                 if (unlikely(res < 0)) {
-                                        //spin_unlock(&mm->page_table_lock);
+                                        if(p != current)
+                                                spin_unlock(&mm->page_table_lock);
                                         return res;
                                 }
                         }
@@ -222,6 +254,7 @@ SYSCALL_DEFINE2(expose_page_table, pid_t, pid,
                 if (unlikely(last_vm))
                         break;
         }
-        //spin_unlock(&mm->page_table_lock);
+        if(p != current)
+                spin_unlock(&mm->page_table_lock);
         return 1;
 }

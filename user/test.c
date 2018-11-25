@@ -43,36 +43,44 @@ void print_pgtbl(struct expose_pgtbl_args *args, unsigned long range)
         unsigned long *pgd_table = (unsigned long *)args->fake_pgd;
         unsigned long *pud_tables = (unsigned long *)args->fake_puds;
         unsigned long *pmd_tables = (unsigned long *)args->fake_pmds;
-        int total_pgd = (int)range;
+        unsigned long *pte_tables = (unsigned long *)args->page_table_addr;
+        int total_pgd = 10;
 
         printf("======PGD=====\n");
         for (int i = 0; i < 512; i++) {
-                if (!pgd_table[i])
+                if (pgd_table[i] == 0)
                         continue;
                 printf("%03d|0x%016lx|\n", i, pgd_table[i]);
         }
         printf("======PUD=====\n");
-        printf("%d\n", total_pgd);
         for (int i = 0; i < total_pgd; i++) {
                for (int j = 0; j < 512; j++) {
-                       if (!pud_tables[j])
+                       if (pud_tables[j] == 0)
                                continue;
-                       printf("%03d->%03d|0x%016lx|\n",i ,j , (long unsigned int)&pud_tables[j]);
+                       printf("%03d->%03d|0x%016lx|\n", i, j, pud_tables[j]);
                }
                pud_tables = (unsigned long *)((unsigned long)pud_tables
                        + 512 * sizeof(unsigned long));
         }
         printf("======PMD=====\n");
         for (int i = 0; i < total_pgd; i++) {
-                for (int j = 0; j < 512; j++) {
-                        for (int m = 0; m < 512; m++) {
-                                if (pmd_tables[m] == 0)
-                                        continue;
-                                printf("%03d->%03d->%3d|0x%016lx|\n",i ,j ,m, pmd_tables[m]);
-                        }
-                        pmd_tables = (unsigned long *)((unsigned long)pmd_tables
-                                + 512 * sizeof(unsigned long));
+               for (int j = 0; j < 512; j++) {
+                       if (pmd_tables[j] == 0)
+                               continue;
+                       printf("%03d->%03d|0x%016lx|\n", i, j, pmd_tables[j]);
                }
+               pmd_tables = (unsigned long *)((unsigned long)pmd_tables
+                       + 512 * sizeof(unsigned long));
+        }
+        printf("======PTE=====\n");
+        for (int i = 0; i < total_pgd; i++) {
+               for (int j = 0; j < 512; j++) {
+                       if (pte_tables[j] == 0)
+                               continue;
+                       printf("%03d->%03d|0x%016lx|\n",i ,j , pte_tables[j]);
+               }
+               pte_tables = (unsigned long *)((unsigned long)pte_tables
+                       + 512 * sizeof(unsigned long));
         }
 }
 
@@ -91,7 +99,8 @@ int main(int argc, char **argv)
                         info.pgdir_shift, info.pud_shift,
                         info.pmd_shift, info.page_shift);
 
-        args.begin_vaddr = 0x640000000000; //PGD=200
+        //args.begin_vaddr = 0x640000000000; //PGD=200
+        args.begin_vaddr = 0x000000000000; //PGD=200
 	args.end_vaddr = 0xffffffffffff; //VA_END
 
         base_addr = (unsigned long *)malloc(sizeof(unsigned long) * 512);
@@ -101,25 +110,26 @@ int main(int argc, char **argv)
 
         range = pgd_index(args.end_vaddr) - pgd_index(args.begin_vaddr) + 1;
 
-        base_addr = mmap(NULL, sizeof(unsigned long) * range * 512,
-                        PROT_WRITE | PROT_READ, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+        base_addr = mmap(NULL, sizeof(unsigned long) * 10 * 512,
+                        PROT_WRITE | PROT_READ, MAP_ANONYMOUS | MAP_SHARED, -1, 0);
         if (base_addr == NULL)
                 return -1;
         args.fake_puds = (unsigned long)base_addr;
 
-        base_addr = mmap(NULL, sizeof(unsigned long) * range * 512 * 512,
-                        PROT_WRITE | PROT_READ, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+        base_addr = mmap(NULL, sizeof(unsigned long) * 10 * 10 * 512,
+                        PROT_WRITE | PROT_READ, MAP_ANONYMOUS | MAP_SHARED, -1, 0);
         if (base_addr == NULL)
                 return -1;
         args.fake_pmds = (unsigned long)base_addr;
 
-        base_addr = mmap(NULL, sizeof(unsigned long) * range * 512 * 512 * 512,
-                        PROT_WRITE | PROT_READ, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+        base_addr = mmap(NULL, sizeof(unsigned long) * 512 * 512,
+                        PROT_WRITE | PROT_READ, MAP_ANONYMOUS | MAP_SHARED, -1, 0);
         if (base_addr == NULL)
                 return -1;
         args.page_table_addr = (unsigned long)base_addr;
+        printf("%16lx\n", (unsigned long)base_addr);
 
-        pid = -1;
+        pid = 1;
 	printf("%d %lu\n", getpid(), range);
 	res = syscall(__NR_expose_page_table, pid, &args);
 	if (res < 0)
