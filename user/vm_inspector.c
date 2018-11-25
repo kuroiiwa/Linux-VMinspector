@@ -17,10 +17,12 @@
 #define PTRS_PER_PTE		512
 #define PTRS_PER_PMD		512
 #define PTRS_PER_PGD		512
+#define PTRS_PER_PUD		512
 
 #define pgd_index(addr)		(((addr) >> PGDIR_SHIFT) & (PTRS_PER_PGD - 1))
 #define pmd_index(addr)		(((addr) >> PMD_SHIFT) & (PTRS_PER_PMD - 1))
 #define pte_index(addr)		(((addr) >> PAGE_SHIFT) & (PTRS_PER_PTE - 1))
+#define pud_index(addr)         (((addr) >> PUD_SHIFT) & (PTRS_PER_PUD - 1))
 
 struct pagetable_layout_info {
         uint32_t pgdir_shift;
@@ -65,34 +67,88 @@ static inline int user_bit(unsigned long pte_entry)
 
 void print_pgtbl(struct expose_pgtbl_args *args)
 {
-        unsigned long fake_pgd;
+	unsigned long *fake_pgd = (unsigned long *)args->fake_pgd;
+        unsigned long *fake_pmds = (unsigned long *)args->fake_pmds;
+        unsigned long *page_table_addr = (unsigned long *)args->page_table_addr;
+        unsigned long begin_vaddr = args->begin_vaddr;
+        unsigned long end_vaddr = args->end_vaddr;
+        unsigned long curr_va, f_pte_ent, p;
+        unsigned long *f_pgd_ent, *f_pud_ent, *f_pmd_ent;
+        int i = 0;
+        // for (int i = 0; i < 512 * 512; i++) {
+        //         if (fake_pmds[i] != 0)
+        //                 printf("%lx %lx %lx %lx %lx\n", get_phys_addr(fake_pmds[i]), young_bit(fake_pmds[i]), dirty_bit(fake_pmds[i]), write_bit(fake_pmds[i]), user_bit(fake_pmds[i]) );
+        //
+        // }
 
-        printf("0x%lx 0x%lx %d %d %d %d", )
-        
+        for (int i = 0; i < 512; i++) {
+                f_pgd_ent = (unsigned long *)(fake_pgd +i
+                                * sizeof(unsigned long));
+                printf("%d,%lx %lx \n", i, fake_pgd[i], *f_pgd_ent);
+        }
+
+        for (curr_va = begin_vaddr;curr_va < end_vaddr; curr_va += 1024) {
+                f_pgd_ent = (unsigned long *)(fake_pgd + pgd_index(curr_va)
+                                * sizeof(unsigned long));
+
+                if (*f_pgd_ent == 0){
+                        curr_va += ((unsigned long)1 << 39);
+                        printf("no found pgd %d\n",i);
+                        printf("%d\n",pgd_index(curr_va));
+                        printf("%lx\n", *f_pgd_ent);
+                        i++;
+                        continue;
+                }
+                printf("pgd found\n");
+
+                f_pud_ent = (unsigned long *)(*f_pgd_ent + pud_index(curr_va)
+                                * sizeof(unsigned long));
+                if (*f_pud_ent == 0){
+                        curr_va += ((unsigned long)1 << 30);
+                        continue;
+                }
+                printf("pud found\n");
+
+                f_pmd_ent = (unsigned long *)(*f_pud_ent + pmd_index(curr_va)
+                                                * sizeof(unsigned long));
+                if (*f_pmd_ent == 0){
+                        curr_va += ((unsigned long)1 << 21);
+                        continue;
+                }
+                p = *f_pmd_ent;
+
+                printf("%lx %lx %d %d %d %d\n", curr_va, get_phys_addr(p), young_bit(p), dirty_bit(p), write_bit(p), user_bit(p) );
+
+        }
+
 }
 
-int main(int argc, char **argv)
+int main(int argc, char *argv[])
 {
-	struct pagetable_layout_info info;
 	struct expose_pgtbl_args args;
 	pid_t pid;
         unsigned long *base_addr;
-        unsigned long range;
         unsigned long va_begin, va_end;
+        int res;
 
-        if (argc < 3)
+
+        if (argc < 3){
+        	printf("input invalid");
         	return -1;
-
-        if (argv[1] != '-') {
-                pid = argv[1];
-                va_begin = argv[2];
-                va_end = argv[3];
-        } else {
-                pid = argv[2];
-                va_begin = argv[3];
-                va_end = argv[4];
         }
-        
+
+
+        if (argv[1][0] != '-') {
+                pid = strtol(argv[1], NULL, 10);
+                va_begin = strtoul(argv[2], NULL, 0);
+                va_end = strtoul(argv[3], NULL, 0);
+        } else {
+		pid = strtol(argv[2], NULL, 10);
+                va_begin = strtoul(argv[3], NULL, 0);
+                va_end = strtoul(argv[4], NULL, 0);
+        }
+        printf("the argument is %d %lu %lu \n", pid, va_begin, va_end);
+
         args.begin_vaddr = va_begin;
 	args.end_vaddr = va_end;
 
@@ -107,7 +163,7 @@ int main(int argc, char **argv)
                 return -1;
         args.fake_puds = (unsigned long)base_addr;
 
-        base_addr = mmap(NULL, sizeof(unsigned long) * 100 * 512,
+        base_addr = mmap(NULL, sizeof(unsigned long) * 512 * 512,
                         PROT_WRITE | PROT_READ, MAP_ANONYMOUS | MAP_SHARED, -1, 0);
         if (base_addr == NULL)
                 return -1;
@@ -118,13 +174,15 @@ int main(int argc, char **argv)
         if (base_addr == NULL)
                 return -1;
         args.page_table_addr = (unsigned long)base_addr;
-        
+
 	printf("%d\n", getpid());
 	res = syscall(__NR_expose_page_table, pid, &args);
-	if (res < 0)
+        printf("start printing\n");
+	if (res < 0){
 		printf("Error: %d\n", res);
+                return 0;
+        }
         print_pgtbl(&args);
 
         return 0;
 }
-

@@ -143,6 +143,9 @@ SYSCALL_DEFINE2(expose_page_table, pid_t, pid,
         pgd_t *pgd_p;
         pud_t *pud_p;
         pmd_t *pmd_p;
+        fake_pud_assign = 0;
+        fake_pmd_assign = 0;
+        fake_pte_assign = 0;
 
         if (args == NULL || pid < -1)
                 return -EINVAL;
