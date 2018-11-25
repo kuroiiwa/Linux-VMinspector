@@ -66,6 +66,11 @@ static inline int user_bit(unsigned long pte_entry)
 	return 1UL << 2 & pte_entry ? 1 : 0;
 }
 
+static inline int pres_bit(unsigned long pte_entry)
+{
+	return 1UL & pte_entry ? 1 : 0;
+}
+
 void print_pgtbl(struct expose_pgtbl_args *args, int flag)
 {
 	unsigned long *fake_pgd = (unsigned long *)args->fake_pgd;
@@ -110,6 +115,8 @@ void print_pgtbl(struct expose_pgtbl_args *args, int flag)
 		}
 
 		p = f_pte_ent;
+		if (!pres_bit(p))
+			continue;
 		printf("0x%lx %lx %d %d %d %d\n", curr_va,
 			get_phys_addr(p), young_bit(p), dirty_bit(p),
 			write_bit(p), user_bit(p));
