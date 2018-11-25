@@ -68,12 +68,14 @@ static inline int user_bit(unsigned long pte_entry)
 void print_pgtbl(struct expose_pgtbl_args *args)
 {
 	unsigned long *fake_pgd = (unsigned long *)args->fake_pgd;
+        unsigned long *fake_puds = (unsigned long *)args->fake_puds;
         unsigned long *fake_pmds = (unsigned long *)args->fake_pmds;
         unsigned long *page_table_addr = (unsigned long *)args->page_table_addr;
         unsigned long begin_vaddr = args->begin_vaddr;
         unsigned long end_vaddr = args->end_vaddr;
-        unsigned long curr_va, f_pte_ent, p;
-        unsigned long *f_pgd_ent, *f_pud_ent, *f_pmd_ent;
+        unsigned long curr_va, p;
+        unsigned long f_pgd_ent, f_pud_ent, f_pmd_ent, f_pte_ent;
+        unsigned long *f_pgd_ent_p, *f_pud_ent_p, *f_pmd_ent_p, *f_pte_ent_p;
         int i = 0;
         // for (int i = 0; i < 512 * 512; i++) {
         //         if (fake_pmds[i] != 0)
@@ -81,43 +83,67 @@ void print_pgtbl(struct expose_pgtbl_args *args)
         //
         // }
 
-        for (int i = 0; i < 512; i++) {
-                f_pgd_ent = (unsigned long *)(fake_pgd +i
-                                * sizeof(unsigned long));
-                printf("%d,%lx %lx \n", i, fake_pgd[i], *f_pgd_ent);
-        }
+//        for (int i = 0; i < 512; i++) {
+//                f_pgd_ent = (unsigned long *)(fake_pgd + i
+//                                * sizeof(unsigned long));
+//                printf("%d,%lx %lx \n", i, fake_pgd[i], *f_pgd_ent);
+//        }
 
-        for (curr_va = begin_vaddr;curr_va < end_vaddr; curr_va += 1024) {
-                f_pgd_ent = (unsigned long *)(fake_pgd + pgd_index(curr_va)
-                                * sizeof(unsigned long));
-
-                if (*f_pgd_ent == 0){
+        for (curr_va = begin_vaddr;curr_va < end_vaddr; curr_va += 4096) {
+                // f_pgd_ent = (unsigned long *)(fake_pgd + pgd_index(curr_va)
+                //                 * sizeof(unsigned long));
+                f_pgd_ent = fake_pgd[(int)pgd_index(curr_va)];
+                if (f_pgd_ent == 0){
                         curr_va += ((unsigned long)1 << 39);
-                        printf("no found pgd %d\n",i);
-                        printf("%d\n",pgd_index(curr_va));
-                        printf("%lx\n", *f_pgd_ent);
-                        i++;
                         continue;
                 }
-                printf("pgd found\n");
 
-                f_pud_ent = (unsigned long *)(*f_pgd_ent + pud_index(curr_va)
-                                * sizeof(unsigned long));
-                if (*f_pud_ent == 0){
-                        curr_va += ((unsigned long)1 << 30);
-                        continue;
+                f_pgd_ent_p = (unsigned long *)f_pgd_ent;
+                f_pud_ent = f_pgd_ent_p[pud_index(curr_va)];
+                if (f_pud_ent == 0) {
+                         curr_va += ((unsigned long)1 << 30);
+                         continue;
                 }
-                printf("pud found\n");
 
-                f_pmd_ent = (unsigned long *)(*f_pud_ent + pmd_index(curr_va)
-                                                * sizeof(unsigned long));
-                if (*f_pmd_ent == 0){
+                f_pud_ent_p = (unsigned long *)f_pud_ent;
+                f_pmd_ent = f_pud_ent_p[pmd_index(curr_va)];
+                if (f_pmd_ent == 0) {
                         curr_va += ((unsigned long)1 << 21);
                         continue;
                 }
-                p = *f_pmd_ent;
 
+                f_pmd_ent_p = (unsigned long *)f_pmd_ent;
+                f_pte_ent = f_pmd_ent_p[pte_index(curr_va)];
+                if(f_pte_ent == 0){
+                        curr_va += ((unsigned long)1 << 12);
+                        continue;
+                }
+
+                p = f_pte_ent;
                 printf("%lx %lx %d %d %d %d\n", curr_va, get_phys_addr(p), young_bit(p), dirty_bit(p), write_bit(p), user_bit(p) );
+
+
+
+                
+
+                // f_pmd_ent = (unsigned long *)f_pud_ent[pud_index(curr_va)];
+                // if (*f_pmd_ent == 0){
+                //         curr_va += ((unsigned long)1 << 30);
+                //         continue;
+                // }
+                //
+                // f_pte_ent = (unsigned long *)f_pmd_ent[pmd_index(curr_va)];
+                // // f_pmd_ent = (unsigned long *)(*f_pud_ent + pmd_index(curr_va)
+                // //                                 * sizeof(unsigned long));
+                // if (*f_pte_ent == 0){
+                //         curr_va += ((unsigned long)1 << 21);
+                //         continue;
+                // }
+                //
+                //
+                // p = *f_pte_ent;
+                //
+                // printf("%lx %lx %d %d %d %d\n", curr_va, get_phys_addr(p), young_bit(p), dirty_bit(p), write_bit(p), user_bit(p) );
 
         }
 
@@ -169,13 +195,14 @@ int main(int argc, char *argv[])
                 return -1;
         args.fake_pmds = (unsigned long)base_addr;
 
-        base_addr = mmap(NULL, sizeof(unsigned long) * 512 * 512,
+        base_addr = mmap(NULL, sizeof(unsigned long) * 10 *512 * 512,
                         PROT_WRITE | PROT_READ, MAP_ANONYMOUS | MAP_SHARED, -1, 0);
         if (base_addr == NULL)
                 return -1;
         args.page_table_addr = (unsigned long)base_addr;
 
 	printf("%d\n", getpid());
+        pid = getpid();
 	res = syscall(__NR_expose_page_table, pid, &args);
         printf("start printing\n");
 	if (res < 0){
