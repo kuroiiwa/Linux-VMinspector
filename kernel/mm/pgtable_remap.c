@@ -117,7 +117,7 @@ static int save_pmd(unsigned long f_pmd_addr, unsigned long page_table_addr,
 	down_write(&current->mm->mmap_sem);
 	if (remap_pfn_range(pte_vma, f_pte_addr, pfn,
 		     PAGE_SIZE,
-		     pte_vma->vm_page_prot)){
+		     pte_vma->vm_page_prot)) {
 		if (p != current)
 			up_write(&p->mm->mmap_sem);
 		up_write(&current->mm->mmap_sem);
