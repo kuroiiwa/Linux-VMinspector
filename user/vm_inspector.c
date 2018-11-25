@@ -131,7 +131,8 @@ int main(int argc, char *argv[])
 	 *questions/8393389/inputing-validating-hex-values-correctly
 	 */
 	if (argc == 4) {
-		if (argv[1][strspn(argv[1], dec)] == 0 &&
+		if ((argv[1][strspn(argv[1], dec)] == 0 ||
+		strcmp(argv[1], "-1") == 0) &&
 		argv[2][strspn(argv[2], hex)] == 0 &&
 		argv[3][strspn(argv[3], hex)] == 0) {
 			pid = strtol(argv[1], NULL, 10);
@@ -141,7 +142,8 @@ int main(int argc, char *argv[])
 		} else
 			goto Parse_error;
 	} else if (argc == 5) {
-		if (argv[2][strspn(argv[2], dec)] == 0 &&
+		if ((argv[2][strspn(argv[2], dec)] == 0 ||
+		strcmp(argv[2], "-1") == 0) &&
 		argv[3][strspn(argv[3], hex)] == 0 &&
 		argv[4][strspn(argv[4], hex)] == 0 &&
 		!strcmp(argv[1], "-v")) {
