@@ -22,6 +22,10 @@
 #define pmd_index(addr)		(((addr) >> PMD_SHIFT) & (PTRS_PER_PMD - 1))
 #define pte_index(addr)		(((addr) >> PAGE_SHIFT) & (PTRS_PER_PTE - 1))
 
+#define PUD_ASSIGN	10
+#define PMD_ASSIGN	50
+#define PTE_ASSIGN	100
+
 struct pagetable_layout_info {
         uint32_t pgdir_shift;
         uint32_t pud_shift;
@@ -38,13 +42,13 @@ struct expose_pgtbl_args {
         unsigned long end_vaddr;
 };
 
-void print_pgtbl(struct expose_pgtbl_args *args, unsigned long range)
+void print_pgtbl(struct expose_pgtbl_args *args)
 {
         unsigned long *pgd_table = (unsigned long *)args->fake_pgd;
         unsigned long *pud_tables = (unsigned long *)args->fake_puds;
         unsigned long *pmd_tables = (unsigned long *)args->fake_pmds;
         unsigned long *pte_tables = (unsigned long *)args->page_table_addr;
-        int total_pgd = 10;
+        int total_pgd = 512;
 
         printf("======PGD=====\n");
         for (int i = 0; i < 512; i++) {
@@ -90,7 +94,6 @@ int main(int argc, char **argv)
 	struct expose_pgtbl_args args;
 	pid_t pid;
         unsigned long *base_addr;
-        unsigned long range;
 
 	int res = syscall(__NR_get_pagetable_layout, &info,
 			sizeof(struct pagetable_layout_info));
@@ -108,21 +111,20 @@ int main(int argc, char **argv)
                 return -1;
         args.fake_pgd = (unsigned long)base_addr;
 
-        range = pgd_index(args.end_vaddr) - pgd_index(args.begin_vaddr) + 1;
 
-        base_addr = mmap(NULL, sizeof(unsigned long) * 10 * 512,
+        base_addr = mmap(NULL, sizeof(unsigned long) * PUD_ASSIGN * 512,
                         PROT_WRITE | PROT_READ, MAP_ANONYMOUS | MAP_SHARED, -1, 0);
         if (base_addr == NULL)
                 return -1;
         args.fake_puds = (unsigned long)base_addr;
 
-        base_addr = mmap(NULL, sizeof(unsigned long) * 10 * 10 * 512,
+        base_addr = mmap(NULL, sizeof(unsigned long) * PMD_ASSIGN * 512,
                         PROT_WRITE | PROT_READ, MAP_ANONYMOUS | MAP_SHARED, -1, 0);
         if (base_addr == NULL)
                 return -1;
         args.fake_pmds = (unsigned long)base_addr;
 
-        base_addr = mmap(NULL, sizeof(unsigned long) * 512 * 512,
+        base_addr = mmap(NULL, sizeof(unsigned long) * PTE_ASSIGN * 512,
                         PROT_WRITE | PROT_READ, MAP_ANONYMOUS | MAP_SHARED, -1, 0);
         if (base_addr == NULL)
                 return -1;
@@ -130,10 +132,10 @@ int main(int argc, char **argv)
         printf("%16lx\n", (unsigned long)base_addr);
 
         pid = 1;
-	printf("%d %lu\n", getpid(), range);
+	printf("pid : %d\n", pid);
 	res = syscall(__NR_expose_page_table, pid, &args);
 	if (res < 0)
 		printf("Error[%d]\n", res);
-        print_pgtbl(&args, range);
+        print_pgtbl(&args);
         return 0;
 }

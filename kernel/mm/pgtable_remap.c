@@ -109,23 +109,21 @@ int save_pmd(unsigned long fake_pgd, unsigned long page_table_addr, unsigned lon
 
 
         pfn = pmd_pfn(*pmd_p);
-
         if (p != current)
-                down_write(&current->mm->mmap_sem);
-        down_write(&p->mm->mmap_sem);
+                down_write(&p->mm->mmap_sem);
+        down_write(&current->mm->mmap_sem);
         if (remap_pfn_range(pte_vma, f_pte_addr, pfn,
 		     PAGE_SIZE,
 		     pte_vma->vm_page_prot)){
-                             up_write(&p->mm->mmap_sem);
-                             if (p != current)
-                                     down_write(&current->mm->mmap_sem);
-                             return -EAGAIN;
-                     }
+                if (p != current)
+                        up_write(&p->mm->mmap_sem);
+                up_write(&current->mm->mmap_sem);
+                return -EAGAIN;
+        }
 
-
-        up_write(&p->mm->mmap_sem);
         if (p != current)
-                down_write(&current->mm->mmap_sem);
+                up_write(&p->mm->mmap_sem);
+        up_write(&current->mm->mmap_sem);
 
         printk("PMD saved! %lu|%d\n", pmd_index(curr_va), fake_pte_assign);
         return 0;
@@ -140,7 +138,6 @@ SYSCALL_DEFINE2(expose_page_table, pid_t, pid,
         struct mm_struct *mm;
         struct vm_area_struct *vma;
         const unsigned long ubound_va = 0xffffffffffff;
-        //unsigned long *pgd_k;
         unsigned long start, end, curr_va, prev_va;
         int last_vm, res;
         pgd_t *pgd_p;
