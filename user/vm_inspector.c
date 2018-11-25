@@ -107,7 +107,7 @@ void print_pgtbl(struct expose_pgtbl_args *args, int flag)
 
 		f_pmd_ent_p = (unsigned long *)f_pmd_ent;
 		f_pte_ent = f_pmd_ent_p[pte_index(curr_va)];
-		if (f_pte_ent == 0) {
+		if (f_pte_ent == 0 || !pres_bit(f_pte_ent)) {
 			curr_va += (1UL << 12);
 			if (flag)
 				printf("0xdead00000000 0x0 0 0 0 0\n");
@@ -115,8 +115,6 @@ void print_pgtbl(struct expose_pgtbl_args *args, int flag)
 		}
 
 		p = f_pte_ent;
-		if (!pres_bit(p))
-			continue;
 		printf("0x%lx %lx %d %d %d %d\n", curr_va,
 			get_phys_addr(p), young_bit(p), dirty_bit(p),
 			write_bit(p), user_bit(p));
