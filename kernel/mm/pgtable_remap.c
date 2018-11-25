@@ -18,9 +18,7 @@ SYSCALL_DEFINE2(get_pagetable_layout,
 {
 	struct pagetable_layout_info info;
 
-	if (pgtbl_info == NULL)
-		return -EINVAL;
-	if (size != sizeof(struct pagetable_layout_info))
+	if (pgtbl_info == NULL || size != sizeof(struct pagetable_layout_info))
 		return -EINVAL;
 
 	info.pgdir_shift = PGDIR_SHIFT;
@@ -30,7 +28,7 @@ SYSCALL_DEFINE2(get_pagetable_layout,
 
 	if (copy_to_user(pgtbl_info, &info, size))
 		return -EFAULT;
-	return 1;
+	return 0;
 }
 
 static int save_pgd(unsigned long fake_pgd, unsigned long fake_puds,
@@ -211,7 +209,7 @@ SYSCALL_DEFINE2(expose_page_table, pid_t, pid,
 				res = save_pgd(args_k.fake_pgd,
 					args_k.fake_puds,
 					curr_va, p, &f_pud_addr);
-				if (unlikely(res < 0))
+				if (unlikely(res != 0))
 					return res;
 			}
 			/* PUD */
@@ -224,7 +222,7 @@ SYSCALL_DEFINE2(expose_page_table, pid_t, pid,
 				pud_index(curr_va) != pud_index(prev_va)) {
 				res = save_pud(f_pud_addr, args_k.fake_pmds,
 					curr_va, p, &f_pmd_addr);
-				if (unlikely(res < 0))
+				if (unlikely(res != 0))
 					return res;
 			}
 
@@ -239,7 +237,7 @@ SYSCALL_DEFINE2(expose_page_table, pid_t, pid,
 				res = save_pmd(f_pmd_addr,
 					args_k.page_table_addr,
 					curr_va, pmd_p, p);
-				if (unlikely(res < 0)) {
+				if (unlikely(res != 0)) {
 					if (p != current)
 						spin_unlock(
 							&mm->page_table_lock);
