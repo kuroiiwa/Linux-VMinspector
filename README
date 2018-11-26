@@ -47,3 +47,11 @@ This makes sense because if a write doesn't trigger a page fault, then that data
 have already existed in a physical address, so the PTEs remain unchanged.
 
 5. Copy-on-write
+
+We printed out the page table for a process before forking and then printed out
+the page table of the forked child. The two page tables were identical, as expected,
+except that the child's page table had the write bit unset.
+
+Having the child's page table entries read-only makes sense because the child should 
+not be able to overwrite the parent's pages. If the tries to write, the new data
+should be allocated to a different physical address, hence copy-on-write.

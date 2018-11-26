@@ -278,12 +278,7 @@ Parse_error:
 	print_pgtbl_range(&args, flag, (unsigned long) ptr5,
 			(unsigned long) ptr5 + sizeof(struct s));
 	if (fork() == 0) {
-		printf("Child before write\n");
-		print_pgtbl_range(&args, flag, (unsigned long) ptr5,
-				(unsigned long) ptr5 + sizeof(struct s));
-		for (unsigned long i = 0; i < 9999; ++i)
-			ptr5->a[i] = 10;
-		printf("Child after write\n");
+		printf("Child\n");
 		print_pgtbl_range(&args, flag, (unsigned long) ptr5,
 				(unsigned long) ptr5 + sizeof(struct s));
 		exit(1);
