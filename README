@@ -22,15 +22,24 @@ These bits are set by the CPU because the data was recently accessed and written
 
 3. Read-fault followed by a write
 
-We triggered a read fault by allocating heap memory and then accessing its uninitialized data.
-After accessing, the page table gets populated with entries that have their young bit and user
-bit set, while their dirty bit and write bit are unset.
+We triggered a page fault by allocating heap memory and then accessing its uninitialized data.
+The page table gets populated with numerous entries that have different virtual addresses which
+all map to the same physical address. 
+(Note: These addresses have their young bit and user bit set, while their dirty bit and write bit are unset.)
 
-This makes sense because the dirty bit is set when data has been modified, and the write bit is
-set if the page is writable. Since we are only accessing data here, these bits remain unset.
+After writing, the same virtual addresses now map to different physical addresses and have their
+dirty bit and write bit updated accordingly.
+
+
+These observations make sense because the read-fault should result in new page table entries
+being added to the page table. The virtual addresses all map to one physical address because
+our heap memory was uninitialized. Also, since the dirty bit is only set when data has been modified, 
+and the write bit is set if the page is writable, it makes sense that these bits are unset 
+after the read fault.
 
 
 4. Write (without fault)
+
 In our test, the page table before non page-faulting writes is identical to the page table 
 after the writes have occurred.
 
