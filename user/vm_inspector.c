@@ -80,7 +80,8 @@ void print_pgtbl(struct expose_pgtbl_args *args, int flag)
 	unsigned long f_pgd_ent, f_pud_ent, f_pmd_ent, f_pte_ent;
 	unsigned long *f_pgd_ent_p, *f_pud_ent_p, *f_pmd_ent_p;
 
-	for (curr_va = begin_vaddr; curr_va < end_vaddr; curr_va += 4096) {
+	curr_va = begin_vaddr;
+	while (curr_va < end_vaddr) {
 		f_pgd_ent = fake_pgd[(int)pgd_index(curr_va)];
 		if (f_pgd_ent == 0) {
 			curr_va += (1UL << 39);
@@ -118,6 +119,8 @@ void print_pgtbl(struct expose_pgtbl_args *args, int flag)
 		printf("0x%lx %lx %d %d %d %d\n", curr_va,
 			get_phys_addr(p), young_bit(p), dirty_bit(p),
 			write_bit(p), user_bit(p));
+		
+		curr_va += (1UL << 12);
 	}
 
 }
