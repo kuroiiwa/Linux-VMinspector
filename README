@@ -4,9 +4,9 @@
 1. Allocating heap memory but not using it
 
 From our tests, calling malloc without using the heap memory resulted in only one or two physical
-frames being allocated, the rest of the virtual addresses were unmapped. 
+frames being allocated, the rest of the virtual addresses were unmapped.
 
-This result makes sense because physical frames are only allocated as needed. 
+This result makes sense because physical frames are only allocated as needed.
 In other words, even if data exists in the virtual address space, it will not be mapped
 to a physical address until absolutely necessary.
 
@@ -23,8 +23,8 @@ TEST #1: MALLOC
 
 2. Write-fault
 
-We triggered a write fault by allocating heap memory (like in Test #1) and then initializing its 
-data. After initialization, the page table shows up with many more page table entries (with their 
+We triggered a write fault by allocating heap memory (like in Test #1) and then initializing its
+data. After initialization, the page table shows up with many more page table entries (with their
 young bit, dirty bit, write bit and user bit set).
 
 These bits are set by the CPU because the data was recently accessed and written to.
@@ -56,7 +56,7 @@ After Write Fault
 
 We triggered a page fault by allocating heap memory and then accessing its uninitialized data.
 The page table gets populated with numerous entries that have different virtual addresses which
-all map to the same physical address. 
+all map to the same physical address.
 (Note: These addresses have their young bit and user bit set, while their dirty bit and write bit are unset.)
 
 After writing, the same virtual addresses now map to different physical addresses and have their
@@ -65,8 +65,8 @@ dirty bit and write bit updated accordingly.
 
 These observations make sense because the read-fault should result in new page table entries
 being added to the page table. The virtual addresses all map to one physical address because
-our heap memory was uninitialized. Also, since the dirty bit is only set when data has been modified, 
-and the write bit is set if the page is writable, it makes sense that these bits are unset 
+our heap memory was uninitialized. Also, since the dirty bit is only set when data has been modified,
+and the write bit is set if the page is writable, it makes sense that these bits are unset
 after the read fault.
 
 ============================================
@@ -105,7 +105,7 @@ After Write
 
 4. Write (without fault)
 
-In our test, the page table before non page-faulting writes is identical to the page table 
+In our test, the page table before non page-faulting writes is identical to the page table
 after the writes have occurred.
 
 This makes sense because if a write doesn't trigger a page fault, then that data must
@@ -144,7 +144,7 @@ We printed out the page table for a process before forking and then printed out
 the page table of the forked child. The two page tables were identical, as expected,
 except that the child's page table had the write bit unset.
 
-Having the child's page table entries read-only makes sense because the child should 
+Having the child's page table entries read-only makes sense because the child should
 not be able to overwrite the parent's pages. If the tries to write, the new data
 should be allocated to a different physical address, hence copy-on-write.
 
