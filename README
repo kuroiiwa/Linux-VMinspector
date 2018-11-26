@@ -1,0 +1,7 @@
+# vm\_inspector
+## Test Cases
+1. Allocating heap memory but not using it
+2. Write-fault
+3. Read-fault followed by a write
+4. Write (without fault)
+5. Copy-on-write

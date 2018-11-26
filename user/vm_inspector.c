@@ -84,21 +84,21 @@ void print_pgtbl(struct expose_pgtbl_args *args, int flag)
 	while (curr_va < end_vaddr) {
 		f_pgd_ent = fake_pgd[(int)pgd_index(curr_va)];
 		if (f_pgd_ent == 0) {
-			curr_va += (1UL << 39);
+			curr_va += (1UL << PGDIR_SHIFT);
 			continue;
 		}
 
 		f_pgd_ent_p = (unsigned long *)f_pgd_ent;
 		f_pud_ent = f_pgd_ent_p[pud_index(curr_va)];
 		if (f_pud_ent == 0) {
-			curr_va += (1UL << 30);
+			curr_va += (1UL << PUD_SHIFT);
 			continue;
 		}
 
 		f_pud_ent_p = (unsigned long *)f_pud_ent;
 		f_pmd_ent = f_pud_ent_p[pmd_index(curr_va)];
 		if (f_pmd_ent == 0) {
-			curr_va += (1UL << 21);
+			curr_va += (1UL << PMD_SHIFT);
 			continue;
 		}
 
@@ -109,7 +109,7 @@ void print_pgtbl(struct expose_pgtbl_args *args, int flag)
 		f_pmd_ent_p = (unsigned long *)f_pmd_ent;
 		f_pte_ent = f_pmd_ent_p[pte_index(curr_va)];
 		if (f_pte_ent == 0) {
-			curr_va += (1UL << 12);
+			curr_va += (1UL << PAGE_SHIFT);
 			continue;
 		}
 		p = f_pte_ent;
@@ -122,7 +122,7 @@ void print_pgtbl(struct expose_pgtbl_args *args, int flag)
 			get_phys_addr(p), young_bit(p), dirty_bit(p),
 			write_bit(p), user_bit(p));
 
-		curr_va += (1UL << 12);
+		curr_va += (1UL << PAGE_SHIFT);
 	}
 
 }
