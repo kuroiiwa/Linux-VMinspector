@@ -115,7 +115,7 @@ void print_pgtbl(struct expose_pgtbl_args *args, int flag)
 				printf("0xdead00000000 0x0 0 0 0 0\n");
 			continue;
 		}
-		
+
 		printf("0x%lx %lx %d %d %d %d\n", curr_va,
 			get_phys_addr(p), young_bit(p), dirty_bit(p),
 			write_bit(p), user_bit(p));
