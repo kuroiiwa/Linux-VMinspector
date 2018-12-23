@@ -10,6 +10,7 @@ This result makes sense because physical frames are only allocated as needed.
 In other words, even if data exists in the virtual address space, it will not be mapped
 to a physical address until absolutely necessary.
 
+```
 ============================================
 TEST #1: MALLOC
 ============================================
@@ -19,6 +20,7 @@ TEST #1: MALLOC
 0xdead00000000 0x0 0 0 0 0
 0xdead00000000 0x0 0 0 0 0
 0xdead00000000 0x0 0 0 0 0
+```
 
 
 2. Write-fault
@@ -29,6 +31,7 @@ young bit, dirty bit, write bit and user bit set).
 
 These bits are set by the CPU because the data was recently accessed and written to.
 
+```
 ============================================
 TEST #2: WRITE FAULT
 ============================================
@@ -50,6 +53,7 @@ After Write Fault
 0x55cd7d8ee080 7d98a000 1 1 1 1
 0x55cd7d8ef080 7d98d000 1 1 1 1
 0x55cd7d8f0080 7d98e000 1 1 1 1
+```
 
 
 3. Read-fault followed by a write
@@ -68,7 +72,7 @@ being added to the page table. The virtual addresses all map to one physical add
 our heap memory was uninitialized. Also, since the dirty bit is only set when data has been modified,
 and the write bit is set if the page is writable, it makes sense that these bits are unset
 after the read fault.
-
+```
 ============================================
 TEST #3: READ FAULT
 ============================================
@@ -101,7 +105,7 @@ After Write
 0x55cd7d8f7cd0 7ddff000 1 1 1 1
 0x55cd7d8f8cd0 7ded7000 1 1 1 1
 0x55cd7d8f9cd0 7ddcf000 1 1 1 1
-
+```
 
 4. Write (without fault)
 
@@ -110,7 +114,7 @@ after the writes have occurred.
 
 This makes sense because if a write doesn't trigger a page fault, then that data must
 have already existed in a physical address, so the PTEs remain unchanged.
-
+```
 ============================================
 TEST #4: WRITE (NO PAGE FAULT)
 ============================================
@@ -136,7 +140,7 @@ After Write
 0x55cd7d901920 7ddf6000 1 1 1 1
 0x55cd7d902920 7de31000 1 1 1 1
 0x55cd7d903920 7de04000 1 1 1 1
-
+```
 
 5. Copy-on-write
 
@@ -147,7 +151,7 @@ except that the child's page table had the write bit unset.
 Having the child's page table entries read-only makes sense because the child should
 not be able to overwrite the parent's pages. If the tries to write, the new data
 should be allocated to a different physical address, hence copy-on-write.
-
+```
 ============================================
 TEST #5: COPY ON WRITE
 ============================================
@@ -173,3 +177,4 @@ Child
 0x55cd7d90b570 7ded8000 1 1 0 1
 0x55cd7d90c570 7df8e000 1 1 0 1
 0x55cd7d90d570 7deda000 1 1 0 1
+```
