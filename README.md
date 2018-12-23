@@ -1,7 +1,7 @@
 # vm\_inspector
 
 ## Test Cases (with examples)
-1. Allocating heap memory but not using it
+### 1. Allocating heap memory but not using it
 
 From our tests, calling malloc without using the heap memory resulted in only one or two physical
 frames being allocated, the rest of the virtual addresses were unmapped.
@@ -23,7 +23,7 @@ TEST #1: MALLOC
 ```
 
 
-2. Write-fault
+### 2. Write-fault
 
 We triggered a write fault by allocating heap memory (like in Test #1) and then initializing its
 data. After initialization, the page table shows up with many more page table entries (with their
@@ -56,7 +56,7 @@ After Write Fault
 ```
 
 
-3. Read-fault followed by a write
+### 3. Read-fault followed by a write
 
 We triggered a page fault by allocating heap memory and then accessing its uninitialized data.
 The page table gets populated with numerous entries that have different virtual addresses which
@@ -107,7 +107,7 @@ After Write
 0x55cd7d8f9cd0 7ddcf000 1 1 1 1
 ```
 
-4. Write (without fault)
+### 4. Write (without fault)
 
 In our test, the page table before non page-faulting writes is identical to the page table
 after the writes have occurred.
@@ -142,7 +142,7 @@ After Write
 0x55cd7d903920 7de04000 1 1 1 1
 ```
 
-5. Copy-on-write
+### 5. Copy-on-write
 
 We printed out the page table for a process before forking and then printed out
 the page table of the forked child. The two page tables were identical, as expected,
